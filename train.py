@@ -8,12 +8,12 @@ import os
 import logging
 from TSUnet import TSU
 import torch
+import torch.nn as nn
 import GPUtil
 import argparse
 from dataset_synapse import Synapse_dataset
-from torch.nn.modules.loss import CrossEntropyLoss
-from utils import DiceLoss
-from utils import dice_coeff
+# from torch.nn.modules.loss import CrossEntropyLoss
+from utils import BCELoss2d,SoftDiceLoss,dice_coeff
 import pandas as pd
 
 data_size=512
@@ -26,7 +26,7 @@ parser.add_argument('--lr', action='store', type=float,
 parser.add_argument('--epochs', action='store', type=int,
                         default=50, help='train rounds over training set')
 parser.add_argument('--num_classes', type=int,
-                    default=2, help='output channel of network')
+                    default=1, help='output channel of network')
 
 
 
@@ -53,8 +53,8 @@ if __name__ == "__main__":
 
     model = TSU()
     model.to(device)
-    ce_loss = CrossEntropyLoss()
-    dice_loss = DiceLoss(opts.num_classes)
+    bce_loss = BCELoss2d()
+    dice_loss = SoftDiceLoss()
     optimizer = torch.optim.Adam(model.parameters(),lr=opts.lr,betas=(0.9,0.99))
     
     
@@ -64,7 +64,7 @@ if __name__ == "__main__":
     test_acc_list = []
     iter_num=0
     max_iterations=opts.epochs*len(data_loader_train.dataset)
-    # writer = SummaryWriter(log_dir='')
+    
     model.train()
     for epoch in range(opts.epochs):
         train_batch_num = 0
@@ -78,17 +78,16 @@ if __name__ == "__main__":
             seq = seq.unsqueeze(1)
             optimizer.zero_grad()
 
-            pred = model(seq)
-            # 
+            pred = model(seq).squeeze(1)
+            pred = (pred-pred.min())/(pred.max()-pred.min())
             
             
-            
-            loss_ce = ce_loss(pred, label.long())
+            # accuracy
+            loss_bce = bce_loss(pred, label)
             loss_dice = dice_loss(pred, label)
-            loss = 0.5 * loss_ce + 0.5 * loss_dice
-            
-            # loss = loss_fct(pred, label)
+            loss = 0.5 * loss_bce + 0.5 * loss_dice
             loss.backward()
+            
             lr_ = base_lr * (1.0 - iter_num / max_iterations) ** 0.9
             opts.lr=lr_
             optimizer.step()
@@ -96,8 +95,9 @@ if __name__ == "__main__":
             train_loss += loss.item()
             
             
-            pred=pred.max(dim=1).values
+            
             count_cur=dice_coeff(pred,label)
+            
             print("Lrate: %.4f"%lr_,"DICE: %.4f"%count_cur)
             counts+=count_cur
             iter_num=iter_num+1
@@ -106,14 +106,13 @@ if __name__ == "__main__":
         print("average train DICE is: %.4f"%avg_acc)
         train_loss_list.append(train_loss / len(data_loader_train.dataset))
         train_acc_list.append(avg_acc)
-        # writer.add_graph(model, seq)
-        # write csv file
+
         train_loss_dataframe = pd.DataFrame(data=train_loss_list)
         train_acc_dataframe = pd.DataFrame(data=train_acc_list)
         train_loss_dataframe.to_csv('./output_results/train_loss.csv',index=False)
         train_acc_dataframe.to_csv('./output_results/train_DICE.csv',index=False)
         
-        save_interval = 10  # int(max_epoch/6)
+        save_interval = 10
         if (epoch + 1) % save_interval == 0:
             save_mode_path = os.path.join(snapshot_path, 'epoch_' + str(epoch) + '.pth')
             torch.save(model.state_dict(), save_mode_path)
@@ -136,29 +135,28 @@ if __name__ == "__main__":
                 test_label = test_label.to(device)
                 test_seq = test_seq.unsqueeze(1)
                 
-                t_pred = model(test_seq)
-                
+                t_pred = model(test_seq).squeeze(1)
+                t_pred = (t_pred-t_pred.min())/(t_pred.max()-t_pred.min())
                 outs.append(t_pred)
                 labels.append(test_label)
+                
+                
+                
                 # accuracy
-                
-                
-                loss_ce = ce_loss(t_pred, test_label.long())
+                loss_bce = bce_loss(t_pred, test_label)
                 loss_dice = dice_loss(t_pred, test_label)
-                loss = 0.5 * loss_ce + 0.5 * loss_dice
-                # loss = loss_fct(t_pred.squeeze(1), test_label)t_
+                loss = 0.5 * loss_bce + 0.5 * loss_dice
+         
                 test_loss += loss.item()
                 test_batch_num += 1
-                # test_y += list(test_label.data.cpu().numpy().flatten())
-                # test_y_pred += list(t_pred.data.cpu().numpy().flatten())
+
                 
 
-                t_pred=t_pred.max(dim=1).values
+                
                 count_cur=dice_coeff(t_pred,test_label)
                 print("test-DICE: %.4f"%count_cur)
                 counts+=count_cur
-                # counts+=predict.squeeze(0).eq(test_label.squeeze(0)).sum().item()
-                # counts += predict.cpu().eq(test_label.cpu().view_as(predict)).sum().item()
+
 
         outs = torch.cat(outs,dim=0)
         labels = torch.cat(labels).reshape(-1)
@@ -167,19 +165,13 @@ if __name__ == "__main__":
         test_loss_list.append(test_loss / len(data_loader_test.dataset))
         print('epoch: %d, test loss: %.4f,test DICE: %.4f' %
               (epoch, test_loss/ test_batch_num,avg_acc))
-        # writer.add_scalar('scalar/train_loss', train_loss / train_batch_num, epoch)
-        # writer.add_scalar('scalar/test_loss', test_loss / test_batch_num, epoch)
-        # write csv file
+
         test_loss_dataframe = pd.DataFrame(data = test_loss_list)
         test_acc_dataframe = pd.DataFrame(data = test_acc_list)
         test_loss_dataframe.to_csv('./output_results/test_loss.csv',index=False)
         test_acc_dataframe.to_csv('./output_results/test_DICE.csv',index=False)
     
-    # writer.close()
 
-    # draw_test_info(test_loss_list, test_acc_list)
-    # draw_train_info(train_loss_list, train_acc_list)
-    # draw_roc_confusion(outs, labels)
 
 
 

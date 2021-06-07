@@ -1,5 +1,5 @@
 import torch.nn as nn
-import torch
+import torch.nn.functional as F
 
 
 def dice_coeff(pred, target):
@@ -13,42 +13,33 @@ def dice_coeff(pred, target):
 
 
 
+ 
+ 
+class BCELoss2d(nn.Module):
+    def __init__(self, weight=None, size_average=True):
+        super(BCELoss2d, self).__init__()
+        self.bce_loss = nn.BCELoss(weight, size_average)
+ 
+    def forward(self, logits, targets):
+        probs = F.sigmoid(logits)  # 二分类问题，sigmoid等价于softmax
+        probs_flat = probs.view(-1)
+        targets_flat = targets.view(-1)
+        return self.bce_loss(probs_flat, targets_flat)
+    
 
-
-class DiceLoss(nn.Module):
-    def __init__(self, n_classes):
-        super(DiceLoss, self).__init__()
-        self.n_classes = n_classes
-
-    def _one_hot_encoder(self, input_tensor):
-        tensor_list = []
-        for i in range(self.n_classes):
-            temp_prob = input_tensor == i  # * torch.ones_like(input_tensor)
-            tensor_list.append(temp_prob.unsqueeze(1))
-        output_tensor = torch.cat(tensor_list, dim=1)
-        return output_tensor.float()
-
-    def _dice_loss(self, score, target):
-        target = target.float()
-        smooth = 1e-5
-        intersect = torch.sum(score * target)
-        y_sum = torch.sum(target * target)
-        z_sum = torch.sum(score * score)
-        loss = (2 * intersect + smooth) / (z_sum + y_sum + smooth)
-        loss = 1 - loss
-        return loss
-
-    def forward(self, inputs, target, weight=None, softmax=False):
-        if softmax:
-            inputs = torch.softmax(inputs, dim=1)
-        target = self._one_hot_encoder(target)
-        if weight is None:
-            weight = [1] * self.n_classes
-        assert inputs.size() == target.size(), 'predict {} & target {} shape do not match'.format(inputs.size(), target.size())
-        class_wise_dice = []
-        loss = 0.0
-        for i in range(0, self.n_classes):
-            dice = self._dice_loss(inputs[:, i], target[:, i])
-            class_wise_dice.append(1.0 - dice.item())
-            loss += dice * weight[i]
-        return loss / self.n_classes
+class SoftDiceLoss(nn.Module):
+    def __init__(self, weight=None, size_average=True):
+        super(SoftDiceLoss, self).__init__()
+ 
+    def forward(self, logits, targets):
+        num = targets.size(0)
+        smooth = 1
+        
+        probs = F.sigmoid(logits)
+        m1 = probs.view(num, -1)
+        m2 = targets.view(num, -1)
+        intersection = (m1 * m2)
+ 
+        score = 2. * (intersection.sum(1) + smooth) / (m1.sum(1) + m2.sum(1) + smooth)
+        score = 1 - score.sum() / num
+        return score

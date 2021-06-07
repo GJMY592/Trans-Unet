@@ -71,7 +71,7 @@ class Trans_block(nn.Module):
     
 class TSU(nn.Module): 
     
-    def __init__(self, in_channel=1, out_channel=2): 
+    def __init__(self, in_channel=1, out_channel=1): 
         super(TSU, self).__init__() 
         
         # Encode 
@@ -205,7 +205,8 @@ class TSU(nn.Module):
        
        decode_block1 = self.crop_and_concat(cat_layer1, encode_block1, crop=True) 
        final_layer = self.final_layer(decode_block1)
-       return torch.softmax(final_layer,dim=1)
+       #输出为像素分布在正类的概率
+       return final_layer
  
 
 
