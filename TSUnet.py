@@ -166,33 +166,25 @@ class TSU(nn.Module):
     def forward(self, x): 
        # Encode 
        encode_block1 = self.conv_encode1(x)
-       encode_block1 = self.conv_trans1(encode_block1)
+       # encode_block1 = self.conv_trans1(encode_block1)
        encode_pool1 = self.conv_maxpool1(encode_block1)
        
        encode_block2 = self.conv_encode2(encode_pool1) 
-       encode_block2 = self.conv_trans2(encode_block2)
+       # encode_block2 = self.conv_trans2(encode_block2)
        encode_pool2 = self.conv_maxpool2(encode_block2) 
        
        encode_block3 = self.conv_encode3(encode_pool2) 
-       encode_block3 = self.conv_trans3(encode_block3)
+       # encode_block3 = self.conv_trans3(encode_block3)
        encode_pool3 = self.conv_maxpool3(encode_block3)
        
        encode_block4 = self.conv_encode4(encode_pool3)
-       encode_block3 = self.conv_trans3(encode_block3)
+       # encode_block4 = self.conv_trans4(encode_block4)
        encode_pool4 = self.conv_maxpool4(encode_block4) 
        
        # Bottleneck 
        bottleneck1 = self.bottleneck(encode_pool4)
        
-       # print(encode_block1.shape)
-       # print(encode_pool1.shape)
-       # print(encode_block2.shape)
-       # print(encode_pool2.shape)
-       # print(encode_block3.shape)
-       # print(encode_pool3.shape)
-       # print(encode_block4.shape)
-       # print(encode_pool4.shape)
-       # print(bottleneck1.shape)
+
        # Decode 
        decode_block4 = self.crop_and_concat(bottleneck1, encode_block4, crop=True) 
        cat_layer3 = self.conv_decode4(decode_block4)
@@ -207,13 +199,3 @@ class TSU(nn.Module):
        final_layer = self.final_layer(decode_block1)
        #输出为像素分布在正类的概率
        return final_layer
- 
-
-
-
-       
-     
-        
-        
-        
-        
