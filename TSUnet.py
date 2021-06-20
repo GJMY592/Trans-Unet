@@ -151,8 +151,8 @@ class TSU(nn.Module):
             torch.nn.ReLU(), 
             torch.nn.BatchNorm2d(mid_channel), 
             torch.nn.Conv2d(kernel_size=kernel_size, in_channels=mid_channel, out_channels=out_channels, padding=1), 
-            torch.nn.ReLU(), 
-            torch.nn.BatchNorm2d(out_channels)) 
+            torch.nn.Sigmoid())
+            # torch.nn.BatchNorm2d(out_channels))
         return block  
         
     def crop_and_concat(self, upsampled, bypass, crop=False): 
@@ -199,3 +199,13 @@ class TSU(nn.Module):
        final_layer = self.final_layer(decode_block1)
        #输出为像素分布在正类的概率
        return final_layer
+ 
+
+
+
+       
+     
+        
+        
+        
+        
